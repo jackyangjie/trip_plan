@@ -9,23 +9,21 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
 
     # JWT
-    secret_key: str = "change-this-in-production"
-    algorithm: str = "HS256"
+    jwt_secret: str = "change-this-in-production"
+    jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
-    refresh_token_expire_days: int = 7
 
     # AI Providers
     openai_api_key: str = ""
+    anthropic_api_key: str = ""
     tongyi_api_key: str = ""
-    claude_api_key: str = ""
 
     # Amap
     amap_api_key: str = ""
-    amap_web_api_key: str = ""
 
     # App
     app_name: str = "Travel Planner"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
     debug: bool = True
 
     class Config:
