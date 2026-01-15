@@ -1,2 +1,3 @@
-// Re-export all exports from this directory
-export * from './';
+export * from './storageService';
+export * from './authService';
+export { supabase } from './supabaseClient';
