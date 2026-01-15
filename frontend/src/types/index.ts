@@ -14,23 +14,7 @@ export interface UserPreferences {
   };
 }
 
-export interface Trip {
-  id: string;
-  userId?: string;
-  title: string;
-  destinations: string[];
-  startDate: string;
-  endDate: string;
-  budget: Budget;
-  status: 'planning' | 'confirmed' | 'completed' | 'cancelled';
-  itinerary: Itinerary;
-  shareToken?: string;
-  isPublic: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Budget {
+export interface TripBudget {
   total: number;
   transport: number;
   accommodation: number;
@@ -38,26 +22,36 @@ export interface Budget {
   activities: number;
 }
 
-export interface Itinerary {
-  days: Day[];
-}
-
-export interface Day {
-  date: string;
-  activities: Activity[];
-}
-
-export interface Activity {
+export interface TripItineraryItem {
   id: string;
-  type: 'transport' | 'accommodation' | 'food' | 'attraction';
+  day: number;
+  time: string;
+  type: 'transport' | 'accommodation' | 'attraction' | 'food' | 'custom';
   title: string;
+  description?: string;
   location?: {
+    name: string;
     lat: number;
     lng: number;
-    address: string;
   };
-  startTime?: string;
-  endTime?: string;
   cost?: number;
+  duration?: number;
   notes?: string;
+}
+
+export interface Trip {
+  id: string;
+  userId?: string;
+  title: string;
+  destinations: string[];
+  startDate: string;
+  endDate: string;
+  budget: TripBudget;
+  status: 'planning' | 'confirmed' | 'completed' | 'cancelled';
+  itinerary: TripItineraryItem[];
+  shareToken?: string;
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isLocal: boolean;
 }
