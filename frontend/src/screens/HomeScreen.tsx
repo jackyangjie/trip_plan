@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { FAB, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { useTripStore } from '../../stores';
-import { useAuthStore } from '../../stores';
+import { useTripStore, useAuthStore } from '../../stores';
 import TripCard from './components/TripCard';
 import EmptyState from './components/EmptyState';
 
