@@ -11,18 +11,20 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "axios": "^1.6.2",
+    "dayjs": "^1.11.10",
     "expo": "~51.0.0",
     "expo-router": "~3.5.0",
     "react": "18.2.0",
+    "react-dom": "18.2.0",
     "react-native": "0.74.0",
-    "@react-navigation/native": "^6.1.9",
-    "@react-navigation/native-stack": "^6.9.17",
-    "zustand": "^4.4.7",
     "react-native-paper": "^5.11.0",
-    "axios": "^1.6.2",
-    "@react-native-async-storage/async-storage": "^1.21.0",
     "react-native-vector-icons": "^10.0.0",
-    "dayjs": "^1.11.10"
+    "react-native-web": "~0.19.10",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
