@@ -1,0 +1,56 @@
+# Supabase 简化版 Docker Compose 配置
+# 仅包含最核心的服务：PostgreSQL 和 Studio
+# 如需完整的 Supabase 功能，建议使用 Supabase Cloud (supabase.com) 或官方 CLI
+
+services:
+  # PostgreSQL 数据库
+  db:
+    image: postgres:15-alpine
+    container_name: supabase_db
+    environment:
+      POSTGRES_PASSWORD: your-super-secret-password
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+
+  # Supabase Studio (Web 界面)
+  studio:
+    image: supabase/studio:latest
+    container_name: supabase_studio
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # 数据库连接配置
+      STUDIO_PG_META_URL: http://db:5432
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: your-super-secret-password
+
+      # Studio 基础配置
+      DEFAULT_ORGANIZATION_NAME: Default Organization
+      DEFAULT_PROJECT_NAME: Default Project
+      HOSTNAME: "::"  # IPv6 兼容
+    ports:
+      - "3200:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/platform/profile').then(r => r.status === 200 ? 0 : 1)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  supabase_db_data:

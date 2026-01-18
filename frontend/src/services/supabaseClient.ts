@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_KEY } from '../constants';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || '';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || SUPABASE_URL;
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || SUPABASE_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {

@@ -27,7 +27,6 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ user: null, token: null, isAuthenticated: false }),
 
       login: async (email: string, password: string) => {
-        set({ isLoading: true });
         try {
           const response = await fetch('http://localhost:8000/auth/login', {
             method: 'POST',
@@ -41,14 +40,23 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Login error:', error);
           throw error;
-        } finally {
-          set({ isLoading: false });
         }
       },
     }),
     {
       name: 'auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: {
+        getItem: async (name) => {
+          const value = await AsyncStorage.getItem(name);
+          return value ? JSON.parse(value) : null;
+        },
+        setItem: async (name, value) => {
+          await AsyncStorage.setItem(name, JSON.stringify(value));
+        },
+        removeItem: async (name) => {
+          await AsyncStorage.removeItem(name);
+        },
+      },
       partialize: (state) => ({ user: state.user, token: state.token }),
     }
   )

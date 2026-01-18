@@ -44,7 +44,7 @@ def test_login_failure():
 
 def test_get_trips_unauthorized():
     response = client.get("/trips")
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_create_trip_unauthorized():
@@ -62,4 +62,4 @@ def test_create_trip_unauthorized():
         },
     }
     response = client.post("/trips", json=trip_data)
-    assert response.status_code == 401
+    assert response.status_code == 403

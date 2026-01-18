@@ -91,34 +91,6 @@ export default function PlanningForm({ onSubmit, onAIContinue }: any) {
     onSubmit(data);
   };
 
-
-  const handleAISubmit = () => {
-    validateDates();
-    if (dateError) return;
-
-    const budget: TripBudget = {
-      total: parseInt(budgetTotal) || 5000,
-      transport: Math.round((parseInt(budgetTotal) || 5000) * 0.3),
-      accommodation: Math.round((parseInt(budgetTotal) || 5000) * 0.35),
-      food: Math.round((parseInt(budgetTotal) || 5000) * 0.2),
-      activities: Math.round((parseInt(budgetTotal) || 5000) * 0.15),
-    };
-
-    const data = {
-      destinations: destinations.split('、').map(d => d.trim()).filter(d => d),
-      startDate,
-      endDate,
-      travelers: parseInt(travelers) || 2,
-      budget,
-      preferences: {
-        foodTypes: selectedFoodTypes,
-        attractionTypes: selectedAttractionTypes,
-      },
-      userId: user?.id,
-    };
-
-    onAIContinue(data);
-  };
   const isFormValid = destinations.length > 0 && startDate && endDate && !dateError;
 
   return (
@@ -271,7 +243,7 @@ export default function PlanningForm({ onSubmit, onAIContinue }: any) {
 
         <Button
           mode="outlined"
-          onPress={handleAISubmit}
+          onPress={onAIContinue}
           style={[styles.button, styles.aiButton]}
           contentStyle={styles.buttonContent}
           labelStyle={styles.aiButtonLabel}

@@ -1,6 +1,10 @@
 export const API_BASE_URL = __DEV__
-  ? 'http://localhost:8000/api/v1'
-  : 'https://api.travelplanner.com/api/v1';
+  ? 'http://localhost:8890'
+  : 'https://api.travelplanner.com';
+
+// Supabase 配置 - 使用本地 Docker 实例
+export const SUPABASE_URL = 'http://localhost:54321';
+export const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wZW5jb2RlX3Rlc3QiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTczNjgwMDAwMCwiZXhwIjoyMDUyMzc2MDAwfQ.placeholder';
 
 export const STORAGE_KEYS = {
   USER: 'travel_planner_user',
