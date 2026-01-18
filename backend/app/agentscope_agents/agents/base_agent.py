@@ -44,11 +44,12 @@ def create_react_agent(
         formatter = None
     else:
         # Default to OpenAI-compatible
+        client_kwargs = {}
+        if base_url != "https://api.openai.com/v1":
+            client_kwargs["base_url"] = base_url
+
         model = OpenAIChatModel(
-            model_name=model_name,
-            api_key=api_key,
-            base_http_api_url=base_url,
-            client_kwargs={"base_url": base_url},
+            model_name=model_name, api_key=api_key, client_kwargs=client_kwargs
         )
         formatter = OpenAIChatFormatter()
 
