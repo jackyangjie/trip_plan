@@ -5,13 +5,21 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 import jwt
 import hashlib
+import uuid
 
 from config import settings
+from app.database import get_db, init_db
+from app.db_models import User, Trip
+from app.api_models import TripPlanRequest
+from sqlalchemy.orm import Session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Travel Planner API started")
+    print("📦 Initializing database...")
+    init_db()
+    print("✅ Database initialized")
     yield
     print("👋 Travel Planner API stopped")
 
@@ -36,6 +44,7 @@ security = HTTPBearer()
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
 ) -> dict:
     token = credentials.credentials
     try:
@@ -65,53 +74,834 @@ async def health_check():
 
 
 @app.post("/auth/register")
-async def register(user_data: dict):
-    password_hash = hashlib.sha256(user_data["password"].encode()).hexdigest()
-    user = {
-        "email": user_data["email"],
-        "password_hash": password_hash,
-        "nickname": user_data.get("nickname", user_data["email"].split("@")[0]),
-    }
+async def register(user_data: dict, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user_data["email"]).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
 
-    return {"message": "User created successfully", "user_id": "test-user-id"}
+    password_hash = hashlib.sha256(user_data["password"].encode()).hexdigest()
+    user = User(
+        id=str(uuid.uuid4()),
+        email=user_data["email"],
+        password_hash=password_hash,
+        nickname=user_data.get("nickname", user_data["email"].split("@")[0]),
+        preferences=user_data.get("preferences", {}),
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "User created successfully", "user_id": user.id}
 
 
 @app.post("/auth/login")
-async def login(email: str, password: str):
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+async def login(user_data: dict, db: Session = Depends(get_db)):
+    email = user_data.get("email")
+    password = user_data.get("password")
 
-    if (
-        email != "test@example.com"
-        or password_hash != hashlib.sha256("password".encode()).hexdigest()
-    ):
+    if not email or not password:
+        raise HTTPException(status_code=422, detail="Email and password required")
+
+    user = db.query(User).filter(User.email == email).first()
+
+    if not user or user.password_hash != hashlib.sha256(password.encode()).hexdigest():
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = jwt.encode(
         {
-            "sub": "test-user-id",
-            "email": email,
+            "sub": str(user.id),
+            "email": user.email,
             "exp": datetime.utcnow() + access_token_expires,
         },
         settings.jwt_secret,
         algorithm=settings.jwt_algorithm,
     )
 
-    return {"access_token": access_token}
+    return {"access_token": access_token, "user_id": user.id}
 
 
 @app.get("/trips")
-async def get_trips(current_user: dict = Depends(get_current_user)):
-    return []
+async def get_trips(
+    current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    user_id = current_user["user_id"]
+    trips = db.query(Trip).filter(Trip.user_id == user_id).all()
+
+    result = []
+    for trip in trips:
+        result.append(
+            {
+                "id": trip.id,
+                "user_id": trip.user_id,
+                "title": trip.title,
+                "destinations": trip.destinations,
+                "start_date": trip.start_date.isoformat() if trip.start_date else None,
+                "end_date": trip.end_date.isoformat() if trip.end_date else None,
+                "travelers": trip.travelers,
+                "status": trip.status,
+                "budget": trip.budget,
+                "preferences": trip.preferences,
+                "itinerary": trip.itinerary,
+                "share_token": trip.share_token,
+                "is_public": trip.is_public,
+                "created_at": trip.created_at.isoformat() if trip.created_at else None,
+                "updated_at": trip.updated_at.isoformat() if trip.updated_at else None,
+            }
+        )
+
+    return result
 
 
 @app.post("/trips")
-async def create_trip(trip_data: dict, current_user: dict = Depends(get_current_user)):
-    trip_data["user_id"] = current_user["user_id"]
-    return trip_data
+async def create_trip(
+    trip_data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.db_models import generate_share_token
+
+    trip = Trip(
+        id=str(uuid.uuid4()),
+        user_id=current_user["user_id"],
+        title=trip_data.get("title", "New Trip"),
+        destinations=trip_data.get("destinations", []),
+        start_date=datetime.fromisoformat(trip_data["start_date"])
+        if trip_data.get("start_date")
+        else None,
+        end_date=datetime.fromisoformat(trip_data["end_date"])
+        if trip_data.get("end_date")
+        else None,
+        travelers=trip_data.get("travelers", 2),
+        status=trip_data.get("status", "draft"),
+        budget=trip_data.get("budget", {}),
+        preferences=trip_data.get("preferences", {}),
+        itinerary=trip_data.get("itinerary", []),
+        share_token=generate_share_token(),
+        is_public=trip_data.get("is_public", False),
+    )
+
+    db.add(trip)
+    db.commit()
+    db.refresh(trip)
+
+    return {
+        "message": "Trip created successfully",
+        "trip_id": trip.id,
+        "trip": {
+            "id": trip.id,
+            "user_id": trip.user_id,
+            "title": trip.title,
+            "destinations": trip.destinations,
+            "start_date": trip.start_date.isoformat() if trip.start_date else None,
+            "end_date": trip.end_date.isoformat() if trip.end_date else None,
+            "travelers": trip.travelers,
+            "status": trip.status,
+            "budget": trip.budget,
+            "preferences": trip.preferences,
+            "itinerary": trip.itinerary,
+            "share_token": trip.share_token,
+            "is_public": trip.is_public,
+            "created_at": trip.created_at.isoformat() if trip.created_at else None,
+            "updated_at": trip.updated_at.isoformat() if trip.updated_at else None,
+        },
+    }
+
+
+@app.get("/trips/{trip_id}")
+async def get_trip(
+    trip_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user["user_id"]
+    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == user_id).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+
+    return {
+        "id": trip.id,
+        "user_id": trip.user_id,
+        "title": trip.title,
+        "destinations": trip.destinations,
+        "start_date": trip.start_date.isoformat() if trip.start_date else None,
+        "end_date": trip.end_date.isoformat() if trip.end_date else None,
+        "travelers": trip.travelers,
+        "status": trip.status,
+        "budget": trip.budget,
+        "preferences": trip.preferences,
+        "itinerary": trip.itinerary,
+        "share_token": trip.share_token,
+        "is_public": trip.is_public,
+        "created_at": trip.created_at.isoformat() if trip.created_at else None,
+        "updated_at": trip.updated_at.isoformat() if trip.updated_at else None,
+    }
+
+
+@app.put("/trips/{trip_id}")
+async def update_trip(
+    trip_id: str,
+    trip_data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user["user_id"]
+    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == user_id).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+
+    if "title" in trip_data:
+        trip.title = trip_data["title"]
+    if "destinations" in trip_data:
+        trip.destinations = trip_data["destinations"]
+    if "start_date" in trip_data:
+        trip.start_date = datetime.fromisoformat(trip_data["start_date"])
+    if "end_date" in trip_data:
+        trip.end_date = datetime.fromisoformat(trip_data["end_date"])
+    if "travelers" in trip_data:
+        trip.travelers = trip_data["travelers"]
+    if "status" in trip_data:
+        trip.status = trip_data["status"]
+    if "budget" in trip_data:
+        trip.budget = trip_data["budget"]
+    if "preferences" in trip_data:
+        trip.preferences = trip_data["preferences"]
+    if "itinerary" in trip_data:
+        trip.itinerary = trip_data["itinerary"]
+
+    trip.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(trip)
+
+    return {
+        "message": "Trip updated successfully",
+        "trip_id": trip.id,
+    }
+
+
+@app.delete("/trips/{trip_id}")
+async def delete_trip(
+    trip_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user["user_id"]
+    trip = db.query(Trip).filter(Trip.id == trip_id, Trip.user_id == user_id).first()
+
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found",
+        )
+
+    db.delete(trip)
+    db.commit()
+
+    return {"message": "Trip deleted successfully"}
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+from fastapi.responses import StreamingResponse
+import json
+import asyncio
+import os
+import logging
+from app.db_models import generate_share_token
+
+logger = logging.getLogger(__name__)
+
+
+@app.post("/trips/ai-plan")
+async def ai_plan_trip_streaming(
+    trip_data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Multi-Agent Trip Planning with SSE Streaming
+    Uses AgentScope ReActAgents with amap-mcp-server tools.
+    """
+    from app.agentscope_agents.coordinator import AgentCoordinator
+    from app.agentscope_agents.mcp_config import create_amap_mcp_client
+    from app.ai_providers import get_provider_config
+
+    async def ai_plan_generator(trip_data, current_user, db):
+        step_data = {
+            "step": 1,
+            "message": "正在初始化行程...",
+            "action": "init",
+            "progress": 5,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        trip = Trip(
+            id=str(uuid.uuid4()),
+            user_id=current_user["user_id"],
+            title=trip_data.get("title", "AI 规划行程"),
+            destinations=trip_data.get("destinations", []),
+            start_date=datetime.fromisoformat(trip_data["start_date"])
+            if trip_data.get("start_date")
+            else None,
+            end_date=datetime.fromisoformat(trip_data["end_date"])
+            if trip_data.get("end_date")
+            else None,
+            travelers=trip_data.get("travelers", 2),
+            status="planning",
+            budget=trip_data.get("budget", {}),
+            preferences=trip_data.get("preferences", {}),
+            itinerary=[],
+            share_token=generate_share_token(),
+            is_public=False,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        step_data = {
+            "step": 2,
+            "message": "✅ 行程基础信息已创建",
+            "action": "init_complete",
+            "progress": 10,
+            "trip_id": trip.id,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 3,
+            "message": "🤖 正在初始化多智能体系统...",
+            "action": "initializing_agents",
+            "progress": 15,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        ai_config = get_provider_config("openai")
+        model_configs = {
+            "transport": ai_config,
+            "accommodation": ai_config,
+            "attraction": ai_config,
+            "food": ai_config,
+            "budget": ai_config,
+            "planner": ai_config,
+        }
+
+        mcp_client = None
+        if os.getenv("AMAP_API_KEY"):
+            try:
+                mcp_client = create_amap_mcp_client()
+                logger.info("Amap MCP client created successfully")
+            except Exception as e:
+                logger.warning(f"Failed to create Amap MCP client: {e}")
+
+        coordinator = AgentCoordinator(model_configs)
+        await coordinator.initialize(mcp_clients={"amap": mcp_client} if mcp_client else None)
+
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 4,
+            "message": "🚄 正在搜索最佳交通方式...",
+            "action": "transport",
+            "progress": 30,
+            "agent": "TransportAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        transport_result = await coordinator._execute_agent(
+            coordinator._agents["transport"],
+            {"action": "recommend", "trip_data": trip_data},
+            "transport"
+        )
+
+        step_data = {
+            "step": 4,
+            "message": "✅ 交通推荐完成",
+            "action": "transport_complete",
+            "progress": 40,
+            "data": transport_result,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 5,
+            "message": "🏨 正在为您寻找住宿...",
+            "action": "accommodation",
+            "progress": 50,
+            "agent": "AccommodationAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        accommodation_result = await coordinator._execute_agent(
+            coordinator._agents["accommodation"],
+            {"action": "recommend", "trip_data": trip_data},
+            "accommodation"
+        )
+
+        step_data = {
+            "step": 5,
+            "message": "✅ 住宿推荐完成",
+            "action": "accommodation_complete",
+            "progress": 60,
+            "data": accommodation_result,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 6,
+            "message": "🏛️ 正在搜索精选景点...",
+            "action": "attraction",
+            "progress": 70,
+            "agent": "AttractionAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        attraction_result = await coordinator._execute_agent(
+            coordinator._agents["attraction"],
+            {"action": "recommend", "trip_data": trip_data},
+            "attraction"
+        )
+
+        step_data = {
+            "step": 6,
+            "message": "✅ 景点推荐完成",
+            "action": "attraction_complete",
+            "progress": 80,
+            "data": attraction_result,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 7,
+            "message": "🍜 正在为您推荐美食...",
+            "action": "food",
+            "progress": 85,
+            "agent": "FoodAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        food_result = await coordinator._execute_agent(
+            coordinator._agents["food"],
+            {"action": "recommend", "trip_data": trip_data},
+            "food"
+        )
+
+        step_data = {
+            "step": 7,
+            "message": "✅ 美食推荐完成",
+            "action": "food_complete",
+            "progress": 90,
+            "data": food_result,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 8,
+            "message": "💰 正在分析预算分配...",
+            "action": "budget",
+            "progress": 95,
+            "agent": "BudgetAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        budget_result = await coordinator._execute_agent(
+            coordinator._agents["budget"],
+            {
+                "action": "analyze",
+                "transport": transport_result,
+                "accommodation": accommodation_result,
+                "attractions": attraction_result,
+                "food": food_result,
+                "budget": trip_data.get("budget", {}),
+            },
+            "budget"
+        )
+
+        step_data = {
+            "step": 8,
+            "message": "✅ 预算分析完成",
+            "action": "budget_complete",
+            "progress": 98,
+            "data": budget_result,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 9,
+            "message": "📋 正在生成完整行程安排...",
+            "action": "generate",
+            "progress": 99,
+            "agent": "PlannerAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        final_plan = await coordinator._execute_agent(
+            coordinator._agents["planner"],
+            {
+                "action": "generate_itinerary",
+                "trip_data": trip_data,
+                "transport_recommendations": transport_result,
+                "accommodation_recommendations": accommodation_result,
+                "attraction_recommendations": attraction_result,
+                "food_recommendations": food_result,
+                "budget_analysis": budget_result
+            },
+            "planner"
+        )
+
+        if "itinerary" in final_plan:
+            trip.itinerary = final_plan["itinerary"]
+
+        if "budget" in final_plan:
+            trip.budget = final_plan["budget"]
+
+        db.commit()
+
+        await asyncio.sleep(0.5)
+
+        step_data = {
+            "step": 10,
+            "message": "🎉 AI 行程规划完成！",
+            "action": "complete",
+            "progress": 100,
+            "trip": {
+                "id": trip.id,
+                "title": trip.title,
+                "destinations": trip.destinations,
+                "start_date": trip.start_date.isoformat() if trip.start_date else None,
+                "end_date": trip.end_date.isoformat() if trip.end_date else None,
+                "travelers": trip.travelers,
+                "status": trip.status,
+                "budget": trip.budget,
+                "preferences": trip.preferences,
+                "itinerary": trip.itinerary,
+                "share_token": trip.share_token,
+                "is_public": trip.is_public,
+                "created_at": trip.created_at.isoformat() if trip.created_at else None,
+                "updated_at": trip.updated_at.isoformat() if trip.updated_at else None,
+            },
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+    return StreamingResponse(
+        ai_plan_generator(trip_data, current_user, db),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+        # 保存到数据库
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        step_data = {
+            "step": 2,
+            "message": "✅ 行程基础信息已创建",
+            "action": "init_complete",
+            "progress": 10,
+            "trip_id": trip.id,
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.5)
+
+        # 调用 AI 协调器
+        coordinator = AgentCoordinator()
+
+        # Step 3: 分析行程需求
+        step_data = {
+            "step": 3,
+            "message": "🤔 正在分析您的行程需求...",
+            "action": "analyzing",
+            "progress": 20,
+            "agent": "PlannerAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.8)
+
+        # Step 4: 推荐交通方式
+        step_data = {
+            "step": 4,
+            "message": "🚄 正在搜索最佳交通方式...",
+            "action": "transport",
+            "progress": 30,
+            "agent": "TransportAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        transport_result = await coordinator.transport.process(
+            {"action": "recommend", **trip_data}
+        )
+
+        if transport_result.success:
+            step_data = {
+                "step": 4,
+                "message": f"✅ 交通推荐完成：找到 {len(transport_result.data.get('options', []))} 个方案",
+                "action": "transport_complete",
+                "progress": 40,
+                "data": transport_result.data,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+        else:
+            step_data = {
+                "step": 4,
+                "message": "⚠️ 交通推荐失败",
+                "action": "transport_error",
+                "progress": 40,
+                "error": transport_result.error,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+
+        await asyncio.sleep(0.5)
+
+        # Step 5: 推荐住宿
+        step_data = {
+            "step": 5,
+            "message": "🏨 正在为您寻找住宿...",
+            "action": "accommodation",
+            "progress": 50,
+            "agent": "AccommodationAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        accommodation_result = await coordinator.accommodation.process(
+            {"action": "recommend", **trip_data}
+        )
+
+        if accommodation_result.success:
+            step_data = {
+                "step": 5,
+                "message": f"✅ 住宿推荐完成：找到 {len(accommodation_result.data.get('hotels', []))} 家酒店",
+                "action": "accommodation_complete",
+                "progress": 60,
+                "data": accommodation_result.data,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+        else:
+            step_data = {
+                "step": 5,
+                "message": "⚠️ 住宿推荐失败",
+                "action": "accommodation_error",
+                "progress": 60,
+                "error": accommodation_result.error,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+
+        await asyncio.sleep(0.5)
+
+        # Step 6: 推荐景点
+        step_data = {
+            "step": 6,
+            "message": "🏛 正在搜索精选景点...",
+            "action": "attraction",
+            "progress": 70,
+            "agent": "AttractionAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        attraction_result = await coordinator.attraction.process(
+            {"action": "recommend", **trip_data}
+        )
+
+        if attraction_result.success:
+            step_data = {
+                "step": 6,
+                "message": f"✅ 景点推荐完成：找到 {len(attraction_result.data.get('attractions', []))} 个景点",
+                "action": "attraction_complete",
+                "progress": 80,
+                "data": attraction_result.data,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+        else:
+            step_data = {
+                "step": 6,
+                "message": "⚠️ 景点推荐失败",
+                "action": "attraction_error",
+                "progress": 80,
+                "error": attraction_result.error,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+
+        await asyncio.sleep(0.5)
+
+        # Step 7: 推荐美食
+        step_data = {
+            "step": 7,
+            "message": "🍜 正在为您推荐美食...",
+            "action": "food",
+            "progress": 85,
+            "agent": "FoodAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        food_result = await coordinator.food.process(
+            {"action": "recommend", **trip_data}
+        )
+
+        if food_result.success:
+            step_data = {
+                "step": 7,
+                "message": f"✅ 美食推荐完成：找到 {len(food_result.data.get('restaurants', []))} 家餐厅",
+                "action": "food_complete",
+                "progress": 90,
+                "data": food_result.data,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+        else:
+            step_data = {
+                "step": 7,
+                "message": "⚠️ 美食推荐失败",
+                "action": "food_error",
+                "progress": 90,
+                "error": food_result.error,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+
+        await asyncio.sleep(0.5)
+
+        # Step 8: 预算分析
+        step_data = {
+            "step": 8,
+            "message": "💰 正在分析预算分配...",
+            "action": "budget",
+            "progress": 95,
+            "agent": "BudgetAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        budget_result = await coordinator.budget.process(
+            {
+                "action": "analyze",
+                "transport": transport_result.data
+                if transport_result.success
+                else None,
+                "accommodation": accommodation_result.data
+                if accommodation_result.success
+                else None,
+                "attractions": attraction_result.data
+                if attraction_result.success
+                else {},
+                "food": food_result.data if food_result.success else {},
+                "budget": trip_data.get("budget", {}),
+            }
+        )
+
+        if budget_result.success:
+            step_data = {
+                "step": 8,
+                "message": "✅ 预算分析完成",
+                "action": "budget_complete",
+                "progress": 98,
+                "data": budget_result.data,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+        else:
+            step_data = {
+                "step": 8,
+                "message": "⚠️ 预算分析失败",
+                "action": "budget_error",
+                "progress": 98,
+                "error": budget_result.error,
+            }
+            yield f"data: {json.dumps(step_data)}\n\n"
+
+        await asyncio.sleep(0.5)
+
+        # Step 9: 生成完整行程
+        step_data = {
+            "step": 9,
+            "message": "📋 正在生成完整行程安排...",
+            "action": "generate",
+            "progress": 99,
+            "agent": "PlannerAgent",
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+        # 生成最终行程
+        final_plan = await coordinator.planner.process(
+            {
+                "action": "generate",
+                "request": trip_data,
+                "transport": transport_result.data if transport_result.success else {},
+                "accommodation": accommodation_result.data
+                if accommodation_result.success
+                else {},
+                "attractions": attraction_result.data
+                if attraction_result.success
+                else {},
+                "food": food_result.data if food_result.success else {},
+                "budget_analysis": budget_result.data if budget_result.success else {},
+            }
+        )
+
+        if final_plan.success and final_plan.data:
+            # 更新行程的 AI 生成的行程
+            trip.itinerary = final_plan.data.get("itinerary", [])
+
+            # 更新预算（如果 AI 优化了）
+            ai_budget = final_plan.data.get("budget", {})
+            if ai_budget:
+                trip.budget = ai_budget
+
+            db.commit()
+
+        await asyncio.sleep(0.5)
+
+        # Step 10: 完成
+        step_data = {
+            "step": 10,
+            "message": "🎉 AI 行程规划完成！",
+            "action": "complete",
+            "progress": 100,
+            "trip": {
+                "id": trip.id,
+                "title": trip.title,
+                "destinations": trip.destinations,
+                "start_date": trip.start_date.isoformat() if trip.start_date else None,
+                "end_date": trip.end_date.isoformat() if trip.end_date else None,
+                "travelers": trip.travelers,
+                "status": trip.status,
+                "budget": trip.budget,
+                "preferences": trip.preferences,
+                "itinerary": trip.itinerary,
+                "share_token": trip.share_token,
+                "is_public": trip.is_public,
+                "created_at": trip.created_at.isoformat() if trip.created_at else None,
+                "updated_at": trip.updated_at.isoformat() if trip.updated_at else None,
+            },
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+
+    return StreamingResponse(
+        ai_plan_generator(trip_data, current_user, db),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
