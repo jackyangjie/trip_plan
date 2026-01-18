@@ -4,7 +4,7 @@ Base Agent Factory Functions
 
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
-from agentscope.models import OpenAIChatModel, AnthropicChatModel, DashScopeChatModel
+from agentscope.model import OpenAIChatModel, AnthropicChatModel, DashScopeChatModel
 from agentscope.tool import Toolkit
 from typing import Dict, Any, Optional
 import os
