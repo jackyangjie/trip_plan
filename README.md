@@ -14,6 +14,33 @@
 
 ## 多智能体旅行规划系统
 
+### AI规划API端点
+
+```bash
+# 启动后端服务
+cd backend
+python main.py
+```
+
+```bash
+# 测试AI规划端点（需要配置AI API密钥）
+curl -X POST http://localhost:8000/trips/ai-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "上海三日游",
+    "destinations": ["上海"],
+    "start_date": "2026-03-01",
+    "end_date": "2026-03-03",
+    "travelers": 2,
+    "budget": {"total": 3000}
+  }'
+```
+
+API将返回：
+- 实时进度更新（SSE流式）
+- 6个智能体并行工作
+- 完整的行程JSON响应
+
 ### 架构概述
 
 系统使用 AgentScope 框架构建了6个专门化的 AI 智能体，它们协作生成综合旅行计划。

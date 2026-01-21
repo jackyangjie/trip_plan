@@ -2,34 +2,37 @@
 Attraction Agent - Specializes in attraction and activity recommendations
 """
 
-from .base_agent import create_react_agent
-from agentscope.tool import Toolkit
-from agentscope.agent import ReActAgent
 from typing import Dict, Any, Optional
+from agentscope.agent import ReActAgent
+from agentscope.model import OpenAIChatModel, AnthropicChatModel, DashScopeChatModel
+from agentscope.formatter import OpenAIChatFormatter
+import os
+import logging
 
+logger = logging.getLogger(__name__)
 
-ATTRACTION_PROMPT = """你是专业的景点和活动推荐专家。
+ATTRACTION_PROMPT = """你是专业的景点推荐专家。
 
 你的职责：
-1. 根据目的地和用户偏好推荐景点
-2. 调用高德地图搜索周边景点、博物馆、公园等
-3. 提供多种类型景点选择（自然风光、历史文化、娱乐设施）
-4. 考虑景点距离、开放时间、票价
+1. 根据目的地和用户偏好推荐景点和活动
+2. 调用高德地图搜索景点和娱乐场所
+3. 提供多样化的活动选择
+4. 考虑天气、季节和当地特色
 
 可用工具（会自动根据任务调用）：
-- amap_geocode: 将地址转换为坐标
-- amap_search_around: 搜索周边 POI（景点、公园、博物馆）
+- maps_geo: 将地址转换为地理坐标
+- maps_around_search: 搜索周边景点、博物馆、公园等
+- maps_search_detail: 获取POI详细信息
+- maps_text_search: 全局搜索景点
 
 输出要求：
 - 返回 JSON 格式
-- 包含至少 5 个景点推荐
-- 每个景点包含：名称、类型、描述、距离、预计游玩时间、门票价格
+- 推荐至少 5 个景点/活动
+- 每个推荐包含：名称、类型、预计时间、费用
 """
 
 
-def create_attraction_agent(
-    model_config: Dict[str, str], toolkit: Optional[Toolkit] = None
-) -> ReActAgent:
+def create_attraction_agent(model_config: Dict[str, str], toolkit: Any = None):
     """
     Create an Attraction Agent specialized in attraction recommendations.
 
@@ -40,10 +43,33 @@ def create_attraction_agent(
     Returns:
         ReActAgent configured for attraction recommendations
     """
-    return create_react_agent(
+    base_url = model_config.get("base_url", "https://api.openai.com/v1")
+    model_name = model_config.get("model", "gpt-4")
+    api_key = model_config.get("api_key") or os.getenv("OPENAI_API_KEY")
+
+    if "anthropic" in base_url.lower():
+        model = AnthropicChatModel(model_name=model_name, api_key=api_key)
+        formatter = None
+    elif "tongyi" in base_url.lower() or "qwen" in model_name.lower():
+        model = DashScopeChatModel(model_name=model_name, api_key=api_key)
+        formatter = None
+    else:
+        client_kwargs = {}
+        if base_url != "https://api.openai.com/v1":
+            client_kwargs["base_url"] = base_url
+
+        model = OpenAIChatModel(
+            model_name=model_name, api_key=api_key, client_kwargs=client_kwargs
+        )
+        formatter = OpenAIChatFormatter()
+
+    agent = ReActAgent(
         name="AttractionAgent",
         sys_prompt=ATTRACTION_PROMPT,
-        model_config=model_config,
+        model=model,
+        formatter=formatter,
         toolkit=toolkit,
         max_iters=20,
     )
+
+    return agent

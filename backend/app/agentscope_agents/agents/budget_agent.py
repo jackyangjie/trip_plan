@@ -2,51 +2,75 @@
 Budget Agent - Specializes in budget analysis and optimization
 """
 
-from .base_agent import create_react_agent
-from agentscope.agent import ReActAgent
-from agentscope.tool import Toolkit
 from typing import Dict, Any, Optional
-
+from agentscope.agent import ReActAgent
+from agentscope.model import OpenAIChatModel, AnthropicChatModel, DashScopeChatModel
+from agentscope.formatter import OpenAIChatFormatter
+import os
 
 BUDGET_PROMPT = """你是专业的预算分析专家。
 
 你的职责：
-1. 分析旅行总预算的合理分配
-2. 评估各单项花费（交通、住宿、餐饮、景点、购物）
-3. 提供预算优化建议
-4. 识别可能的节省成本的机会
+1. 分析旅行预算分配的合理性
+2. 根据推荐内容优化预算
+3. 识别可能的节省机会
+4. 提供预算调整建议
 
 工作流程：
-1. 理解用户的总预算和旅行天数
-2. 分析各个专业 agent 的推荐费用
-3. 评估预算分配的合理性
-4. 提供优化建议和成本控制方案
+1. 接收交通、住宿、景点、美食等推荐内容
+2. 分析各项费用
+3. 评估预算分配的平衡性
+4. 提供优化建议
+
+可用工具：
+- 无需调用外部工具
+- 基于其他agent的推荐进行分析
 
 输出要求：
 - 返回 JSON 格式
-- 包含预算分配表（交通、住宿、餐饮、景点、其他）
-- 提供预算优化建议
-- 识别潜在超支项目并给出解决方案
+- 包含预算分析报告
+- 提供优化建议
 """
 
 
-def create_budget_agent(
-    model_config: Dict[str, str], toolkit: Optional[Toolkit] = None
-) -> ReActAgent:
+def create_budget_agent(model_config: Dict[str, str], toolkit: Any = None):
     """
     Create a Budget Agent specialized in budget analysis.
 
     Args:
         model_config: {"base_url", "model", "api_key"}
-        toolkit: Optional toolkit (not needed for budget analysis)
+        toolkit: Optional toolkit (Budget agent may not need MCP tools)
 
     Returns:
         ReActAgent configured for budget analysis
     """
-    return create_react_agent(
+    base_url = model_config.get("base_url", "https://api.openai.com/v1")
+    model_name = model_config.get("model", "gpt-4")
+    api_key = model_config.get("api_key") or os.getenv("OPENAI_API_KEY")
+
+    if "anthropic" in base_url.lower():
+        model = AnthropicChatModel(model_name=model_name, api_key=api_key)
+        formatter = None
+    elif "tongyi" in base_url.lower() or "qwen" in model_name.lower():
+        model = DashScopeChatModel(model_name=model_name, api_key=api_key)
+        formatter = None
+    else:
+        client_kwargs = {}
+        if base_url != "https://api.openai.com/v1":
+            client_kwargs["base_url"] = base_url
+
+        model = OpenAIChatModel(
+            model_name=model_name, api_key=api_key, client_kwargs=client_kwargs
+        )
+        formatter = OpenAIChatFormatter()
+
+    agent = ReActAgent(
         name="BudgetAgent",
         sys_prompt=BUDGET_PROMPT,
-        model_config=model_config,
+        model=model,
+        formatter=formatter,
         toolkit=toolkit,
         max_iters=20,
     )
+
+    return agent

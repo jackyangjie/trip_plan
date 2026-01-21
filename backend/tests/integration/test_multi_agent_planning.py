@@ -1,5 +1,10 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname((__file__)))))
 
 
 @pytest.mark.asyncio
@@ -18,7 +23,7 @@ async def test_coordinator_initialization_workflow():
 
     coordinator = AgentCoordinator(model_configs)
 
-    await coordinator.initialize(mcp_clients=None)
+    await coordinator.initialize(mcp_clients={})
 
     assert coordinator._is_initialized
     assert len(coordinator._agents) == 6
@@ -45,7 +50,7 @@ async def test_coordinator_plan_trip_structure():
     }
 
     coordinator = AgentCoordinator(model_configs)
-    await coordinator.initialize(mcp_clients=None)
+    await coordinator.initialize(mcp_clients={})
 
     trip_data = {
         "title": "Test Trip",

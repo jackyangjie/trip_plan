@@ -4,6 +4,12 @@ MCP Client Configuration for amap-mcp-server
 
 from agentscope.mcp import StdIOStatefulClient
 import os
+from pathlib import Path
+
+# 确保.env被加载
+env_path = Path(__file__).parent.parent.parent / '.env'
+from dotenv import load_dotenv
+load_dotenv(env_path)
 
 
 def create_amap_mcp_client() -> StdIOStatefulClient:
@@ -18,8 +24,10 @@ def create_amap_mcp_client() -> StdIOStatefulClient:
         command="uvx",
         args=["amap-mcp-server"],
         env={
-            "AMAP_MAPS_API_KEY": os.getenv("AMAP_API_KEY", ""),
+            "AMAP_MAPS_API_KEY": os.getenv("AMAP_API_KEY", os.getenv("AMAP_API_KEY", "")),
             "UV_HTTP_TIMEOUT": "300",
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+            "UV_INDEX": "https://pypi.org/simple",
         },
     )
 

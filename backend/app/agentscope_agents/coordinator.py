@@ -11,14 +11,15 @@ import asyncio
 import json
 import logging
 
-from .agents import (
-    create_transport_agent,
-    create_accommodation_agent,
-    create_attraction_agent,
-    create_food_agent,
-    create_budget_agent,
-    create_planner_agent,
-)
+# Import agent factories directly
+from app.agentscope_agents.agents.transport_agent import create_transport_agent
+from app.agentscope_agents.agents.accommodation_agent import create_accommodation_agent
+from app.agentscope_agents.agents.attraction_agent import create_attraction_agent
+from app.agentscope_agents.agents.food_agent import create_food_agent
+from app.agentscope_agents.agents.budget_agent import create_budget_agent
+from app.agentscope_agents.agents.planner_agent import create_planner_agent
+from app.models import Attraction, Food, Hotel, Transport, TripBudget
+
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,15 @@ class AgentCoordinator:
         amap_toolkit = None
         if mcp_clients and "amap" in mcp_clients:
             amap_toolkit = Toolkit()
-            await amap_toolkit.register_mcp_client(mcp_clients["amap"])
-            logger.info("Injected Amap MCP tools into specialized agents")
+            try:
+                # 先连接MCP客户端
+                await mcp_clients["amap"].connect()
+                # 然后注册到toolkit
+                await amap_toolkit.register_mcp_client(mcp_clients["amap"])
+                logger.info("Injected Amap MCP tools into specialized agents")
+            except Exception as e:
+                logger.warning(f"Failed to register MCP client: {e}")
+                logger.warning(f"Agents will run without MCP tools")
 
         # Create all specialized agents with toolkit injection
         self._agents["transport"] = create_transport_agent(
@@ -141,13 +149,11 @@ class AgentCoordinator:
 
                 # Parallel execution - agents call MCP tools automatically
                 results = await asyncio.gather(
-                    self._execute_agent(transport_agent, trip_data, "transport"),
-                    self._execute_agent(
-                        accommodation_agent, trip_data, "accommodation"
-                    ),
-                    self._execute_agent(attraction_agent, trip_data, "attraction"),
-                    self._execute_agent(food_agent, trip_data, "food"),
-                    self._execute_agent(budget_agent, trip_data, "budget"),
+                    self._execute_agent(transport_agent, trip_data, "transport",Transport),
+                    self._execute_agent(accommodation_agent, trip_data, "accommodation",Hotel),
+                    self._execute_agent(attraction_agent, trip_data, "attraction",Attraction),
+                    self._execute_agent(food_agent, trip_data, "food",Food),
+                    self._execute_agent(budget_agent, trip_data, "budget",TripBudget),
                     return_exceptions=True,
                 )
 
@@ -191,7 +197,7 @@ class AgentCoordinator:
             return {"success": False, "error": str(e)}
 
     async def _execute_agent(
-        self, agent: ReActAgent, task_data: Dict[str, Any], task_name: str
+        self, agent: ReActAgent, task_data: Dict[str, Any], task_name: str, structured_model: Type[BaseModel] | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a single agent's task.
@@ -210,11 +216,19 @@ class AgentCoordinator:
             msg = Msg(
                 name="Coordinator",
                 content=json.dumps(task_data, ensure_ascii=False, default=str),
-                role="coordinator",
+                role="user",
             )
 
             # Agent automatically calls tools and returns result
-            response = await agent(msg)
+            logger.info(f"[{task_name}] 发送消息给Agent")
+            logger.debug(f"[{task_name}] 消息内容: {msg.content[:200]}..." if len(msg.content) > 200 else msg.content)
+            
+            response = await agent(msg,structured_model = structured_model)
+            
+            # 记录LLM原始响应
+
+
+            logger.info(f"[{task_name}] LLM响应: {response.content[:300]}..." if len(response.content) > 300 else response.content)
 
             try:
                 result = json.loads(response.content)
@@ -224,5 +238,5 @@ class AgentCoordinator:
                 return {"content": response.content}
 
         except Exception as e:
-            logger.error(f"{task_name} failed: {e}")
+            logger.error(f"{task_name} failed: {e}",exc_info=True)
             return {"error": str(e)}

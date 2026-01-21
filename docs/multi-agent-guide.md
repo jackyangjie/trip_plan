@@ -1,267 +1,248 @@
-# Multi-Agent Travel Planning System Guide
+# Multi-Agent Travel Planning System - Implementation Guide
 
-## Overview
+## Architecture Overview
 
-This is a multi-agent travel planning system built with AgentScope framework. It uses 6 specialized agents that collaborate to generate comprehensive travel itineraries.
-
-## Architecture
+The multi-agent travel planning system uses the AgentScope framework to coordinate 6 specialized AI agents for intelligent trip planning.
 
 ### Components
 
-- **AgentScope Framework**: Core framework for building AI agents
-- **ReActAgent**: Reasoning agents that can call tools automatically
-- **Toolkit**: Manages MCP (Model Context Protocol) tool integration
-- **MsgHub**: Coordinates multi-agent communication
-- **amap-mcp-server**: Provides real-time map services via MCP
+- **AgentScope Framework**: Core AI agent framework
+- **ReActAgent**: Agents that use reasoning to decide when/how to call tools
+- **MsgHub**: Message hub for inter-agent communication
+- **MCP Integration**: Model Context Protocol for tool integration
+- **Toolkit**: Manages MCP tool connections
 
 ### Specialized Agents
 
-1. **TransportAgent**: Recommends transportation options (flights, trains, etc.)
-2. **AccommodationAgent**: Suggests hotels and accommodations
-3. **AttractionAgent**: Recommends attractions and activities
-4. **FoodAgent**: Suggests restaurants and local cuisine
-5. **BudgetAgent**: Analyzes and optimizes trip budget
-6. **PlannerAgent**: Coordinates all recommendations into final itinerary
+1. **TransportAgent** - Transportation recommendations
+   - Recommends flights, trains, car rentals
+   - Uses Amap MCP tools for geocoding and route planning
+
+2. **AccommodationAgent** - Hotel/accommodation search
+   - Searches hotels, hostels, vacation rentals
+   - Uses Amap search tools
+
+3. **AttractionAgent** - Attraction and activity recommendations
+   - Recommends scenic spots, museums, parks
+   - Uses Amap search tools
+
+4. **FoodAgent** - Restaurant and cuisine recommendations
+   - Recommends local restaurants, street food
+   - Uses Amap search tools
+
+5. **BudgetAgent** - Budget analysis and optimization
+   - Analyzes cost distribution
+   - Identifies saving opportunities
+   - No MCP tools needed
+
+6. **PlannerAgent** - Itinerary generation
+   - Integrates all agent recommendations
+   - Creates day-by-day schedules
+   - No MCP tools needed
+
+### Workflow
+
+1. **Initialization**: AgentCoordinator creates all 6 agents with optional MCP tools
+2. **Task Broadcast**: Coordinator sends planning request to all agents via MsgHub
+3. **Parallel Execution**: Each agent calls relevant MCP tools autonomously
+4. **Result Collection**: Coordinator gathers all agent outputs
+5. **Integration**: PlannerAgent combines everything into final itinerary
+
+### File Structure
+
+```
+backend/app/agentscope_agents/
+├── __init__.py              # Package initialization
+├── mcp_config.py             # MCP client configuration
+├── coordinator.py             # Multi-agent coordinator
+└── agents/
+    ├── __init__.py          # Agent factory functions
+    ├── base_agent.py         # ReActAgent factory
+    ├── transport_agent.py    # Transportation specialist
+    ├── accommodation_agent.py  # Accommodation specialist
+    ├── attraction_agent.py   # Attraction specialist
+    ├── food_agent.py       # Food specialist
+    ├── budget_agent.py      # Budget analyst
+    └── planner_agent.py      # Itinerary planner
+```
 
 ## Configuration
 
 ### Environment Variables
 
-Create a `.env` file in the backend directory:
-
 ```bash
-# AI Models (choose one or multiple)
-OPENAI_BASE_URL=https://api.openai.com/v1
+# AI Models
+OPENAI_API_KEY=sk-your-key
 OPENAI_MODEL=gpt-4
-OPENAI_API_KEY=sk-your-openai-key
 
-# Amap Maps API (required for map services)
-AMAP_API_KEY=your-amap-maps-api-key
-
-# Optional: Anthropic
-ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
-ANTHROPIC_MODEL=claude-3-sonnet-20240229
 ANTHROPIC_API_KEY=your-anthropic-key
+ANTHROPIC_MODEL=claude-3-opus
 
-# Optional: Tongyi (Alibaba Qwen)
-TONGYI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-TONGYI_MODEL=qwen-max
 TONGYI_API_KEY=your-tongyi-key
+TONGYI_MODEL=qwen-max
+
+# MCP Server
+AMAP_API_KEY=your-amap-key
 ```
 
-### MCP Server Setup
+### API Endpoints
 
-The system uses `amap-mcp-server` via stdio for map services:
+- `POST /trips/ai-plan` - Main AI planning endpoint with SSE streaming
+  - Returns real-time progress updates
+  - Streams steps as agents complete their tasks
 
-```bash
-# The MCP client is automatically created by create_amap_mcp_client()
-# Make sure AMAP_API_KEY is set in environment
-```
-
-## Usage
-
-### Backend API
-
-Start the FastAPI server:
-
-```bash
-cd backend
-python -m uvicorn main:app --reload
-```
-
-### AI Trip Planning Endpoint
-
-POST `/trips/ai-plan`
-
-Sends SSE (Server-Sent Events) stream with planning progress:
-
-```json
-{
-  "title": "Tokyo Trip",
-  "destinations": ["Tokyo"],
-  "start_date": "2026-03-01",
-  "end_date": "2026-03-07",
-  "travelers": 2,
-  "budget": {"total": 20000},
-  "preferences": {}
-}
-```
-
-**Response Stream:**
-
-1. Initialization step (5% progress)
-2. Trip creation (10% progress)
-3. Agent initialization (15% progress)
-4. Transport recommendations (30-40% progress)
-5. Accommodation recommendations (50-60% progress)
-6. Attraction recommendations (70-80% progress)
-7. Food recommendations (85-90% progress)
-8. Budget analysis (95-98% progress)
-9. Itinerary generation (99% progress)
-10. Complete (100% progress) - Returns full trip object
-
-### Agent-Only Usage
-
-You can use agents directly in Python:
+## Usage Example
 
 ```python
 from app.agentscope_agents import AgentCoordinator
-from app.ai_providers import get_provider_config
+from fastapi import BackgroundTasks
 
-# Get model configuration
-ai_config = get_provider_config("openai")
-
-# Create coordinator
-model_configs = {
-    "transport": ai_config,
-    "accommodation": ai_config,
-    "attraction": ai_config,
-    "food": ai_config,
-    "budget": ai_config,
-    "planner": ai_config,
-}
-
-coordinator = AgentCoordinator(model_configs)
-await coordinator.initialize(mcp_clients={"amap": mcp_client})
-
-# Plan a trip
-trip_data = {
-    "title": "My Trip",
-    "destinations": ["Paris"],
-    "start_date": "2026-06-01",
-    "end_date": "2026-06-07",
-    "travelers": 2,
-    "budget": {"total": 5000},
-    "preferences": {"interests": ["art", "food"]}
-}
-
-result = await coordinator.plan_trip(trip_data)
-
-print(result["success"])  # True
-print(result["final_itinerary"])  # Complete itinerary
+async def plan_trip(trip_data: dict, db: Session):
+    coordinator = AgentCoordinator({
+        "transport": {"model": "gpt-4", "agent": "transport", "api_key": "sk-xxx"},
+        # ... other agents
+    })
+    
+    await coordinator.initialize()
+    result = await coordinator.plan_trip(trip_data)
+    
+    return result
 ```
 
-## Agent Workflow
+## Agent Responsibilities
 
-1. **Initialize**: Coordinator creates all 6 agents with ReAct reasoning
-2. **Inject MCP Tools**: Agents receive map tools (geocode, search, routing)
-3. **Broadcast Task**: MsgHub sends planning task to all agents
-4. **Parallel Execution**: Each agent processes their specialty:
-   - TransportAgent queries route planning
-   - AccommodationAgent searches hotels
-   - AttractionAgent finds attractions
-   - FoodAgent recommends restaurants
-   - BudgetAgent analyzes costs
-5. **Consolidate**: PlannerAgent combines all recommendations
-6. **Generate**: Final itinerary with daily schedule
-7. **Return**: Complete trip with all recommendations
+### TransportAgent
+- Analyzes travel needs (origin, destination, dates, budget)
+- Recommends optimal transportation (flights, trains, car rental)
+- Uses Amap MCP tools:
+  - `amap_geocode`: Convert addresses to coordinates
+  - `amap_route_planning`: Plan routes with multiple transport modes
+- Provides 2-3 options with pros/cons
+- Considers budget and time efficiency tradeoffs
 
-## MCP Tool Integration
+### AccommodationAgent
+- Recommends hotels and accommodations
+- Considers location, price, rating, facilities
+- Uses Amap MCP tools:
+  - `amap_geocode`: Convert addresses to coordinates
+  - `amap_search_around`: Search nearby hotels
+- Returns 3+ options with details
 
-Agents automatically call these tools via ReAct reasoning:
+### AttractionAgent
+- Recommends scenic spots, museums, parks
+- Considers weather, season, local culture
+- Uses Amap MCP tools:
+  - `amap_geocode`: Convert addresses to coordinates
+  - `amap_search_around`: Search nearby attractions
+- Returns 5+ recommendations
 
-- `amap_geocode`: Convert addresses to coordinates
-- `amap_route_planning`: Plan routes between locations
-- `amap_search_around`: Find POIs around a location (hotels, restaurants, attractions)
+### FoodAgent
+- Recommends local restaurants and street food
+- Considers cuisine preferences (spicy, light, vegetarian)
+- Uses Amap MCP tools:
+  - `amap_geocode`: Convert addresses to coordinates
+  - `amap_search_around`: Search nearby restaurants
+- Returns 5+ restaurant options
 
-The toolkit is injected into agents during initialization:
+### BudgetAgent
+- Analyzes cost distribution
+- Identifies saving opportunities
+- No MCP tools needed (works with other agent results)
+- Provides optimization suggestions
+
+### PlannerAgent
+- Integrates all agent recommendations
+- Creates day-by-day schedule
+- Optimizes time allocation
+- Generates complete JSON itinerary
+- No MCP tools needed (works with other agents' results)
+
+## Agent Communication Pattern
+
+The coordinator broadcasts tasks via MsgHub:
 
 ```python
-# In coordinator.py
-amap_toolkit = Toolkit()
-await amap_toolkit.register_mcp_client(mcp_client)
+task_msg = Msg(
+    name="Coordinator",
+    content=json.dumps({"action": "recommend", "trip_data": ...}),
+    role="coordinator"
+)
 
-# Inject into agents
-create_transport_agent(model_config, toolkit=amap_toolkit)
+hub.broadcast(task_msg)
 ```
+
+Agents respond with recommendations:
+
+```python
+response = await agent(msg)
+result = json.loads(response.content)
+```
+
+## System Features
+
+### MCP Tool Integration
+- Automatic tool discovery and registration
+- Runtime tool execution via ReAct reasoning
+- Support for StdIOStatefulClient (amap-mcp-server)
+
+### Multi-Agent Coordination
+- MsgHub for inter-agent messaging
+- Parallel task execution with asyncio.gather
+- Result aggregation and integration
+
+### Real-Time Progress
+- SSE streaming for live updates
+- Step-by-step progress tracking
+- Agent status monitoring
 
 ## Testing
 
-Run all tests:
+Run integration tests:
 
 ```bash
-cd backend
-pytest tests/ -v
+pytest backend/tests/integration/test_multi_agent_planning.py -v
 ```
 
-Run specific test suites:
+Run unit tests:
 
 ```bash
-# Agent tests
-pytest tests/agents/ -v
-
-# Integration tests
-pytest tests/integration/ -v
-
-# Specific test
-pytest tests/agents/test_transport_agent.py::test_transport_agent_creation -v
+pytest backend/tests/agents/test_transport_agent.py -v
+pytest backend/tests/agents/test_specialized_agents.py -v
 ```
 
-## Troubleshooting
+## Development Notes
 
-### AgentScope Import Errors
+### Common Issues
 
-If you see `ModuleNotFoundError: No module named 'agentscope'`:
+**Toolkit Type Annotation**
+- Use `toolkit: Any = None` instead of `toolkit: Optional[Toolkit] = None`
+- This resolves SQLAlchemy type checker issues
 
-```bash
-pip install agentscope[full]
-```
+**Import Dependencies**
+- Always import from `agentscope.agent` not `agentscope.models`
+- Models must be imported separately if needed
 
-### MCP Client Connection Issues
+### Debugging
 
-Check that `AMAP_API_KEY` is set and valid:
-
-```bash
-echo $AMAP_API_KEY
-```
-
-### Agent Not Calling Tools
-
-Verify toolkit injection in coordinator initialization:
+To debug agent behavior:
 
 ```python
-await coordinator.initialize(mcp_clients={"amap": mcp_client})
+from app.agentscope_agents import AgentCoordinator
+
+coordinator = AgentCoordinator({...})
+await coordinator.initialize()
+
+# Check agent initialization
+print(coordinator._agents.keys())
+
+# Verify MCP client registration
+if coordinator._agents["transport"].toolkit:
+    print("Transport agent has toolkit")
 ```
 
-### API Model Configuration Issues
+## Performance Considerations
 
-Check model config format:
-
-```python
-{
-    "base_url": "https://api.openai.com/v1",
-    "model": "gpt-4",
-    "api_key": "sk-..."
-}
-```
-
-## Project Structure
-
-```
-backend/
-├── app/
-│   ├── agentscope_agents/          # Multi-agent system
-│   │   ├── coordinator.py        # Agent coordination
-│   │   ├── mcp_config.py        # MCP client config
-│   │   ├── agents/              # Specialized agents
-│   │   │   ├── base_agent.py   # ReActAgent factory
-│   │   │   ├── transport_agent.py
-│   │   │   ├── accommodation_agent.py
-│   │   │   ├── attraction_agent.py
-│   │   │   ├── food_agent.py
-│   │   │   ├── budget_agent.py
-│   │   │   └── planner_agent.py
-│   │   └── __init__.py
-│   │   └── __init__.py
-│   ├── api_models.py             # Pydantic models
-│   ├── ai_providers.py           # AI provider config
-│   └── main.py                 # FastAPI app
-├── tests/
-│   ├── agents/                   # Agent unit tests
-│   └── integration/             # End-to-end tests
-└── requirements.txt              # Dependencies
-```
-
-## License
-
-MIT
+- Agents run in parallel for efficiency
+- MCP tools are called lazily via ReAct reasoning
+- SSE streaming provides user feedback
+- Connection pooling for MCP servers

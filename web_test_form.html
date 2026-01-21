@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旅行规划助手 - 前端测试表单</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #1A5490;
+            margin-bottom: 24px;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h1 .icon {
+            background: rgba(26, 84, 144, 0.1);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .required::after {
+            content: " *";
+            color: #e53935;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        input[type="email"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #1A5490;
+        }
+
+        .chip-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chip {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .chip:hover {
+            border-color: #1A5490;
+        }
+
+        .chip.selected {
+            background: #1A5490;
+            color: white;
+            border-color: #1A5490;
+        }
+
+        .date-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .budget-info {
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .budget-breakdown {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .budget-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .budget-item .amount {
+            font-weight: 600;
+            color: #1565c0;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        button {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #1A5490;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0d3a66;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #bdbdbd;
+        }
+
+        .btn-ai {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            grid-column: span 2;
+        }
+
+        .btn-ai:hover {
+            opacity: 0.9;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1A5490;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #e53935;
+            font-size: 14px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .error.visible {
+            display: block;
+        }
+
+        .progress-steps {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+            display: none;
+        }
+
+        .progress-steps.active {
+            display: block;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            gap: 12px;
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            background: #e0e0e0;
+        }
+
+        .step-icon.done {
+            background: #4caf50;
+            color: white;
+        }
+
+        .step-icon.current {
+            background: #1A5490;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .step-text {
+            flex: 1;
+        }
+
+        .success-message {
+            background: #c8e6c9;
+            border: 1px solid #81c784;
+            color: #2e7d32;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .success-message.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <div class="icon">🗺️</div>
+            <span>新建行程</span>
+        </h1>
+
+        <form id="tripForm">
+            <!-- 目的地 -->
+            <div class="form-group">
+                <label for="destinations" class="required">目的地</label>
+                <input
+                    type="text"
+                    id="destinations"
+                    name="destinations"
+                    placeholder="例如：成都、重庆（用顿号分隔）"
+                    required
+                >
+            </div>
+
+            <!-- 日期选择 -->
+            <div class="form-group">
+                <label class="required">旅行日期</label>
+                <div class="date-inputs">
+                    <input
+                        type="date"
+                        id="startDate"
+                        name="startDate"
+                        required
+                    >
+                    <input
+                        type="date"
+                        id="endDate"
+                        name="endDate"
+                        required
+                    >
+                </div>
+                <div id="dateError" class="error">结束日期不能早于开始日期</div>
+            </div>
+
+            <!-- 旅行人数 -->
+            <div class="form-group">
+                <label for="travelers" class="required">旅行人数</label>
+                <input
+                    type="number"
+                    id="travelers"
+                    name="travelers"
+                    min="1"
+                    max="20"
+                    value="2"
+                    required
+                >
+            </div>
+
+            <!-- 总预算 -->
+            <div class="form-group">
+                <label for="budgetTotal" class="required">总预算（元）</label>
+                <input
+                    type="number"
+                    id="budgetTotal"
+                    name="budgetTotal"
+                    min="0"
+                    step="100"
+                    value="5000"
+                    required
+                >
+            </div>
+
+            <!-- 预算分配预览 -->
+            <div class="budget-info" id="budgetPreview">
+                <strong>预算分配预览：</strong>
+                <div class="budget-breakdown">
+                    <div class="budget-item">
+                        <span>🚗 交通 (30%)</span>
+                        <span class="amount">¥1500</span>
+                    </div>
+                    <div class="budget-item">
+                        <span>🏨 住宿 (35%)</span>
+                        <span class="amount">¥1750</span>
+                    </div>
+                    <div class="budget-item">
+                        <span>🍜 餐饮 (20%)</span>
+                        <span class="amount">¥1000</span>
+                    </div>
+                    <div class="budget-item">
+                        <span>🎫 活动 (15%)</span>
+                        <span class="amount">¥750</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 美食偏好 -->
+            <div class="form-group">
+                <label>美食偏好（可多选）</label>
+                <div class="chip-group" id="foodTypes">
+                    <span class="chip" data-value="川菜">川菜</span>
+                    <span class="chip" data-value="粤菜">粤菜</span>
+                    <span class="chip" data-value="湘菜">湘菜</span>
+                    <span class="chip" data-value="东北菜">东北菜</span>
+                    <span class="chip" data-value="西餐">西餐</span>
+                    <span class="chip" data-value="日料">日料</span>
+                    <span class="chip" data-value="韩料">韩料</span>
+                    <span class="chip" data-value="泰国菜">泰国菜</span>
+                    <span class="chip" data-value="素食">素食</span>
+                    <span class="chip" data-value="小吃">小吃</span>
+                </div>
+            </div>
+
+            <!-- 景点偏好 -->
+            <div class="form-group">
+                <label>景点偏好（可多选）</label>
+                <div class="chip-group" id="attractionTypes">
+                    <span class="chip" data-value="自然风光">自然风光</span>
+                    <span class="chip" data-value="历史古迹">历史古迹</span>
+                    <span class="chip" data-value="主题公园">主题公园</span>
+                    <span class="chip" data-value="博物馆">博物馆</span>
+                    <span class="chip" data-value="海滩">海滩</span>
+                    <span class="chip" data-value="山区">山区</span>
+                    <span class="chip" data-value="城市观光">城市观光</span>
+                    <span class="chip" data-value="民俗风情">民俗风情</span>
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="button-group">
+                <button type="submit" class="btn-secondary" id="btnSubmit">创建行程</button>
+                <button type="button" class="btn-secondary" id="btnClear">清空</button>
+                <button type="button" class="btn-ai" id="btnAIPlan">✨ AI智能规划</button>
+            </div>
+        </form>
+
+        <!-- 加载状态 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在处理...</p>
+        </div>
+
+        <!-- AI规划进度 -->
+        <div class="progress-steps" id="progressSteps"></div>
+
+        <!-- 成功消息 -->
+        <div class="success-message" id="successMessage">
+            <strong>✅ 行程创建成功！</strong>
+            <p id="tripDetails"></p>
+        </div>
+    </div>
+
+    <script>
+        // 状态管理
+        const state = {
+            selectedFoodTypes: [],
+            selectedAttractionTypes: [],
+            token: null
+        };
+
+        // API配置
+        const API_BASE_URL = 'http://localhost:8000';
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            setupChipSelection();
+            setupFormHandlers();
+            updateBudgetPreview();
+        });
+
+        // 设置chip选择
+        function setupChipSelection() {
+            // 美食类型
+            document.querySelectorAll('#foodTypes .chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const value = chip.dataset.value;
+                    if (state.selectedFoodTypes.includes(value)) {
+                        state.selectedFoodTypes = state.selectedFoodTypes.filter(t => t !== value);
+                        chip.classList.remove('selected');
+                    } else {
+                        state.selectedFoodTypes.push(value);
+                        chip.classList.add('selected');
+                    }
+                });
+            });
+
+            // 景点类型
+            document.querySelectorAll('#attractionTypes .chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const value = chip.dataset.value;
+                    if (state.selectedAttractionTypes.includes(value)) {
+                        state.selectedAttractionTypes = state.selectedAttractionTypes.filter(t => t !== value);
+                        chip.classList.remove('selected');
+                    } else {
+                        state.selectedAttractionTypes.push(value);
+                        chip.classList.add('selected');
+                    }
+                });
+            });
+        }
+
+        // 设置表单处理
+        function setupFormHandlers() {
+            const budgetInput = document.getElementById('budgetTotal');
+            budgetInput.addEventListener('input', updateBudgetPreview);
+
+            // 日期验证
+            document.getElementById('startDate').addEventListener('change', validateDates);
+            document.getElementById('endDate').addEventListener('change', validateDates);
+
+            // 按钮事件
+            document.getElementById('btnClear').addEventListener('click', clearForm);
+            document.getElementById('btnSubmit').addEventListener('click', handleSubmit);
+            document.getElementById('btnAIPlan').addEventListener('click', handleAIPlan);
+        }
+
+        // 更新预算预览
+        function updateBudgetPreview() {
+            const total = parseInt(document.getElementById('budgetTotal').value) || 5000;
+
+            document.querySelectorAll('.budget-item .amount').forEach((el, idx) => {
+                const percentages = [0.30, 0.35, 0.20, 0.15];
+                el.textContent = '¥' + Math.round(total * percentages[idx]);
+            });
+        }
+
+        // 日期验证
+        function validateDates() {
+            const startDate = new Date(document.getElementById('startDate').value);
+            const endDate = new Date(document.getElementById('endDate').value);
+            const errorEl = document.getElementById('dateError');
+
+            if (startDate && endDate && endDate <= startDate) {
+                errorEl.classList.add('visible');
+                return false;
+            } else {
+                errorEl.classList.remove('visible');
+                return true;
+            }
+        }
+
+        // 清空表单
+        function clearForm() {
+            document.getElementById('tripForm').reset();
+            state.selectedFoodTypes = [];
+            state.selectedAttractionTypes = [];
+            document.querySelectorAll('.chip').forEach(chip => chip.classList.remove('selected'));
+            document.getElementById('successMessage').classList.remove('visible');
+            document.getElementById('progressSteps').classList.remove('active');
+            updateBudgetPreview();
+        }
+
+        // 获取token
+        async function loginAndGetToken() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test_user_automation@example.com',
+                        password: 'test123456'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    state.token = data.access_token;
+                    return true;
+                }
+
+                // 登录失败，尝试注册
+                const registerResponse = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test_user_automation@example.com',
+                        password: 'test123456',
+                        nickname: '自动化测试用户'
+                    })
+                });
+
+                if (registerResponse.ok) {
+                    const data = await registerResponse.json();
+                    state.token = data.access_token;
+                    return true;
+                }
+
+                return false;
+            } catch (error) {
+                console.error('认证失败:', error);
+                return false;
+            }
+        }
+
+        // 提交表单（手动创建）
+        async function handleSubmit(e) {
+            e.preventDefault();
+
+            if (!validateDates()) return;
+
+            showLoading(true);
+
+            if (!await loginAndGetToken()) {
+                alert('认证失败，请检查后端服务');
+                showLoading(false);
+                return;
+            }
+
+            const formData = getFormData();
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/trips`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${state.token}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showSuccess(data.trip);
+                    clearForm();
+                } else {
+                    alert('创建行程失败: ' + response.statusText);
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            }
+
+            showLoading(false);
+        }
+
+        // AI规划
+        async function handleAIPlan() {
+            if (!validateDates()) return;
+
+            showLoading(true);
+            document.getElementById('progressSteps').classList.add('active');
+
+            if (!await loginAndGetToken()) {
+                alert('认证失败，请检查后端服务');
+                showLoading(false);
+                return;
+            }
+
+            const formData = getFormData();
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/trips/ai-plan`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${state.token}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = JSON.parse(line.slice(6));
+                                addProgressStep(data);
+
+                                if (data.action === 'complete' && data.trip) {
+                                    showSuccess(data.trip);
+                                    clearForm();
+                                    document.getElementById('progressSteps').classList.remove('active');
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    alert('AI规划失败: ' + response.statusText);
+                    document.getElementById('progressSteps').classList.remove('active');
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+                document.getElementById('progressSteps').classList.remove('active');
+            }
+
+            showLoading(false);
+        }
+
+        // 获取表单数据
+        function getFormData() {
+            const destinations = document.getElementById('destinations').value;
+            const budgetTotal = parseInt(document.getElementById('budgetTotal').value) || 5000;
+
+            return {
+                title: destinations.split('、').filter(d => d.trim()).join('、') || '未命名行程',
+                destinations: destinations.split('、').map(d => d.trim()).filter(d => d),
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value,
+                travelers: parseInt(document.getElementById('travelers').value) || 2,
+                budget: {
+                    total: budgetTotal,
+                    transport: Math.round(budgetTotal * 0.30),
+                    accommodation: Math.round(budgetTotal * 0.35),
+                    food: Math.round(budgetTotal * 0.20),
+                    activities: Math.round(budgetTotal * 0.15)
+                },
+                preferences: {
+                    foodTypes: state.selectedFoodTypes,
+                    attractionTypes: state.selectedAttractionTypes
+                }
+            };
+        }
+
+        // 添加进度步骤
+        function addProgressStep(data) {
+            const container = document.getElementById('progressSteps');
+            const step = document.createElement('div');
+            step.className = 'progress-step';
+            
+            const iconClass = data.action === 'complete' ? 'done' :
+                           data.progress === 100 ? 'done' : 'current';
+            
+            step.innerHTML = `
+                <div class="step-icon ${iconClass}">
+                    ${data.action === 'complete' ? '✓' : data.progress}
+                </div>
+                <div class="step-text">
+                    <strong>${data.message}</strong>
+                    ${data.agent ? `<br><small>智能体: ${data.agent}</small>` : ''}
+                </div>
+            `;
+            
+            container.appendChild(step);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 显示加载状态
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+
+        // 显示成功消息
+        function showSuccess(trip) {
+            const successEl = document.getElementById('successMessage');
+            const detailsEl = document.getElementById('tripDetails');
+            
+            detailsEl.innerHTML = `
+                <strong>标题:</strong> ${trip.title}<br>
+                <strong>目的地:</strong> ${Array.isArray(trip.destinations) ? trip.destinations.join(', ') : trip.destinations}<br>
+                <strong>日期:</strong> ${trip.start_date || trip.startDate} 至 ${trip.end_date || trip.endDate}<br>
+                <strong>预算:</strong> ¥${trip.budget?.total || trip.budget || 0}<br>
+                <strong>状态:</strong> ${trip.status || '已创建'}
+            `;
+            
+            successEl.classList.add('visible');
+        }
+    </script>
+</body>
+</html>
